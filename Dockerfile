@@ -6,8 +6,7 @@ COPY requirements.txt /app/
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-RUN sudo apt update \
-    sudo apt install ffmpeg
+RUN apt-get update && apt-get install -y ffmpeg
 
 COPY . .
 
