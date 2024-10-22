@@ -1,14 +1,13 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import shutil
+from dotenv import load_dotenv
 import os
 import subprocess
-import whisper
+import whisperx
 import time
-
 app = FastAPI()
-
+load_dotenv()
 os.makedirs("uploads", exist_ok=True)
 
 origins = [
@@ -68,12 +67,26 @@ def convert_video_to_wav(video_path, output_path=None):
     except subprocess.CalledProcessError as e:
         print(f"Erro ao converter vídeo: {e}")
 
+
 def transcribe_audio_with_stamps(audio_path):
+    device = "cpu"
+
     # Carregar o modelo uma vez
-    model = whisper.load_model("small")
-    
-    # Transcrever o áudio usando o modelo carregado
-    result = whisper.transcribe(audio=audio_path, model=model)
-    
+    model = whisperx.load_model("small", device=device, compute_type="float32")
+    audio = whisperx.load_audio(audio_path)
+
+    # Assuming the correct function is `transcribe_audio`
+    result = model.transcribe(audio)
+
+    model_a, metadata = whisperx.load_align_model(language_code=result["language"], device=device)
+    result = whisperx.align(result["segments"], model_a, metadata, audio, device, return_char_alignments=False)
+
+    diarize_model = whisperx.DiarizationPipeline(device=device)
+    diarize_model(audio, min_speakers=4)
+
+    diarize_segments = diarize_model(audio)
+
+    result = whisperx.assign_word_speakers(diarize_segments, result)
+
     return result
 
