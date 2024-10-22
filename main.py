@@ -81,7 +81,7 @@ def transcribe_audio_with_stamps(audio_path):
     model_a, metadata = whisperx.load_align_model(language_code=result["language"], device=device)
     result = whisperx.align(result["segments"], model_a, metadata, audio, device, return_char_alignments=False)
 
-    diarize_model = whisperx.DiarizationPipeline(device=device)
+    diarize_model = whisperx.DiarizationPipeline(use_auth_token="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", device=device)
     diarize_model(audio, min_speakers=4)
 
     diarize_segments = diarize_model(audio)
