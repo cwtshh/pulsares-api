@@ -6,6 +6,9 @@ import os
 import subprocess
 import whisperx
 import time
+
+from whisperx import align
+
 app = FastAPI()
 load_dotenv()
 os.makedirs("uploads", exist_ok=True)
@@ -70,21 +73,27 @@ def convert_video_to_wav(video_path, output_path=None):
 
 def transcribe_audio_with_stamps(audio_path):
     device = "cpu"
+    align_model = "Wave2Vec2"
+    compute_type = "float16"
+    batch_size = 16
 
     # Carregar o modelo uma vez
-    model = whisperx.load_model("small", device=device, compute_type="float32")
+    model = whisperx.load_model("large-v2", device=device, compute_type=compute_type, align_model=align_model)
+    model_dir = "/path/"
+
+    model = whisperx.load_model("large-v2", device, compute_type=compute_type, download_root=model_dir)
+
     audio = whisperx.load_audio(audio_path)
 
     # Assuming the correct function is `transcribe_audio`
-    result = model.transcribe(audio)
+    result = model.transcribe(audio, batch_size=batch_size)
 
     model_a, metadata = whisperx.load_align_model(language_code=result["language"], device=device)
     result = whisperx.align(result["segments"], model_a, metadata, audio, device, return_char_alignments=False)
 
     diarize_model = whisperx.DiarizationPipeline(use_auth_token="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", device=device)
-    diarize_model(audio, min_speakers=4)
 
-    diarize_segments = diarize_model(audio)
+    diarize_segments = diarize_model(audio,min_speakers=4)
 
     result = whisperx.assign_word_speakers(diarize_segments, result)
 
