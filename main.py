@@ -77,15 +77,12 @@ def transcribe_audio_with_stamps(audio_path):
     compute_type = "float16"
     batch_size = 16
 
-    # Carregar o modelo uma vez
-    model = whisperx.load_model("large-v2", device=device, compute_type=compute_type, align_model=align_model)
     model_dir = "/path/"
 
     model = whisperx.load_model("large-v2", device, compute_type=compute_type, download_root=model_dir)
 
     audio = whisperx.load_audio(audio_path)
 
-    # Assuming the correct function is `transcribe_audio`
     result = model.transcribe(audio, batch_size=batch_size)
 
     model_a, metadata = whisperx.load_align_model(language_code=result["language"], device=device)
