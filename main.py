@@ -13,7 +13,9 @@ os.makedirs("uploads", exist_ok=True)
 
 origins = [
     "http://localhost:5173",  # Adicione seu domínio aqui, se necessário
-    "http://localhost:8000",  # Ou o que for relevante
+    "http://localhost:8000",
+    "https://stellar.cwtsh.site",
+    "https://stellar.aidadpdf.cloud"  # Ou o que for relevante
 ]
 
 app.add_middleware(
