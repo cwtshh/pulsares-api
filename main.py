@@ -5,8 +5,11 @@ from dotenv import load_dotenv
 import os
 import subprocess
 import whisperx
+from pydantic import BaseModel
+from faster_whisper import WhisperModel
 import time
 
+from sympy.strategies.core import switch
 from whisperx import align
 
 app = FastAPI()
@@ -26,10 +29,40 @@ app.add_middleware(
     allow_headers=["*"],  # Permita todos os cabeçalhos
 )
 
+class ModelRequest(BaseModel):
+    model_name: str
+    model_type: str
+    model_size: str
+    device: str
+    compute_type: str
+
+models = {}
+
+relative_dir = os.path.join(os.getcwd(), "models")  # Define a relative directory path
+
 @app.get('/')
 def test_route():
     return {'message': 'Hello World'}
 
+@app.post("/define-model/")
+@app.post("/define-model/")
+def load_model(request: ModelRequest):
+    global models
+    key = f"{request.model_type}_{request.model_name}_{request.model_size}_{request.device}_{request.compute_type}"
+
+    if key not in models:
+        if request.model_type == "faster_whisper":
+            model = WhisperModel(request.model_size, device=request.device, compute_type=request.compute_type)
+        elif request.model_type == "whisperx":
+            model = whisperx.load_model(request.model_size, request.device, compute_type=request.compute_type, download_root=relative_dir)
+        else:
+            raise ValueError("Invalid model type. Choose either 'faster_whisper' or 'whisperx'.")
+
+        models[key] = model
+    else:
+        model = models[key]
+
+    return {"message": f"Model {request.model_name} of type {request.model_type} and size {request.model_size} loaded successfully."}
 @app.post("/upload-video/")
 async def upload_video(file: UploadFile = File(...)):
     file_location = f"uploads/{file.filename}"
@@ -72,27 +105,29 @@ def convert_video_to_wav(video_path, output_path=None):
 
 
 def transcribe_audio_with_stamps(audio_path):
-    device = "cuda"
-    align_model = "Wave2Vec2"
-    compute_type = "float16"
-    batch_size = 16
+    model_request = ModelRequest(
+        model_name="whisperx_small",
+        model_type="whisperx",
+        model_size="small",
+        device="cpu",
+        compute_type="int8"
+    )
 
-    model_dir = "/path/"
+    load_model(model_request)  # Load the model using the updated function
 
-    model = whisperx.load_model("large-v2", device, compute_type=compute_type, download_root=model_dir)
+    model_key = f"{model_request.model_type}_{model_request.model_name}_{model_request.model_size}_{model_request.device}_{model_request.compute_type}"
+    model = models[model_key]
 
     audio = whisperx.load_audio(audio_path)
+    result = model.transcribe(audio, batch_size=16)
 
-    result = model.transcribe(audio, batch_size=batch_size)
+    if model_request.model_type == "whisperx":
+        model_a, metadata = whisperx.load_align_model(language_code=result["language"], device=model_request.device)
+        result = whisperx.align(result["segments"], model_a, metadata, audio, model_request.device, return_char_alignments=False)
 
-    model_a, metadata = whisperx.load_align_model(language_code=result["language"], device=device)
-    result = whisperx.align(result["segments"], model_a, metadata, audio, device, return_char_alignments=False)
-
-    diarize_model = whisperx.DiarizationPipeline(use_auth_token="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", device=device)
-
-    diarize_segments = diarize_model(audio,min_speakers=4)
-
-    result = whisperx.assign_word_speakers(diarize_segments, result)
+        diarize_model = whisperx.DiarizationPipeline(use_auth_token="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", device=model_request.device)
+        diarize_segments = diarize_model(audio, min_speakers=4)
+        result = whisperx.assign_word_speakers(diarize_segments, result)
 
     return result
 
