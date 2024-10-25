@@ -72,7 +72,7 @@ def convert_video_to_wav(video_path, output_path=None):
 
 
 def transcribe_audio_with_stamps(audio_path):
-    device = "cpu"
+    device = "cuda"
     align_model = "Wave2Vec2"
     compute_type = "float16"
     batch_size = 16
