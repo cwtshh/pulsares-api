@@ -9,3 +9,8 @@ services:
       - .:/app
     environment:
       - PORT=8045
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]

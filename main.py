@@ -44,7 +44,7 @@ relative_dir = os.path.join(os.getcwd(), "models")  # Define a relative director
 def test_route():
     return {'message': 'Hello World'}
 
-@app.post("/define-model/")
+
 @app.post("/define-model/")
 def load_model(request: ModelRequest):
     global models
