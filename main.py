@@ -49,7 +49,8 @@ def test_route():
 def load_model(request: ModelRequest):
     global models
     key = f"{request.model_type}_{request.model_name}_{request.model_size}_{request.device}_{request.compute_type}"
-
+    global model_request
+    model_request = ModelRequest(model_name=request.model_name, model_type=request.model_type, model_size=request.model_size, device=request.device, compute_type=request.compute_type)
     if key not in models:
         if request.model_type == "faster_whisper":
             model = WhisperModel(request.model_size, device=request.device, compute_type=request.compute_type)
@@ -105,18 +106,9 @@ def convert_video_to_wav(video_path, output_path=None):
 
 
 def transcribe_audio_with_stamps(audio_path):
-    model_request = ModelRequest(
-        model_name="whisperx_small",
-        model_type="whisperx",
-        model_size="small",
-        device="cpu",
-        compute_type="int8"
-    )
-
-    load_model(model_request)  # Load the model using the updated function
-
     model_key = f"{model_request.model_type}_{model_request.model_name}_{model_request.model_size}_{model_request.device}_{model_request.compute_type}"
     model = models[model_key]
+    load_model(models)  # Load the model using the updated function
 
     audio = whisperx.load_audio(audio_path)
     result = model.transcribe(audio, batch_size=16)
