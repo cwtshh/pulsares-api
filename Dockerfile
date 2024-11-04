@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY requirements.txt /app/
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements_2.txt
 
 RUN apt-get update && apt-get install -y ffmpeg
 
@@ -12,5 +12,5 @@ COPY . .
 
 EXPOSE 8045
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8045", "--reload"]
+CMD ["fastapi", "dev", "cuda.py"]
 
