@@ -36,7 +36,14 @@ class ModelRequest(BaseModel):
     compute_type: str
 
 models = {}
-last_loaded_model_request = None
+
+last_loaded_model_request = ModelRequest(
+    model_name="small_faster",
+    model_type="faster_whisper",
+    model_size="small",
+    device="cpu",
+    compute_type="float32"
+)
 
 relative_dir = os.path.join(os.getcwd(), "models")  # Define a relative directory path
 
