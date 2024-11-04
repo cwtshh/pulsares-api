@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y ffmpeg
 
 COPY . .
 
-EXPOSE 8045
+EXPOSE 8000
 
 CMD ["fastapi", "dev", "cuda.py"]
 
