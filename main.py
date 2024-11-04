@@ -8,9 +8,8 @@ import whisperx
 from pydantic import BaseModel
 from faster_whisper import WhisperModel
 import time
+import torch,gc
 
-from sympy.strategies.core import switch
-from whisperx import align
 
 app = FastAPI()
 load_dotenv()
@@ -37,6 +36,7 @@ class ModelRequest(BaseModel):
     compute_type: str
 
 models = {}
+last_loaded_model_request = None
 
 relative_dir = os.path.join(os.getcwd(), "models")  # Define a relative directory path
 
@@ -44,7 +44,9 @@ relative_dir = os.path.join(os.getcwd(), "models")  # Define a relative director
 def test_route():
     return {'message': 'Hello World'}
 
-@app.post("/define-model/")
+@app.get("/models/")
+def get_models():
+    return list(models.keys())
 @app.post("/define-model/")
 def load_model(request: ModelRequest):
     global models
@@ -52,7 +54,7 @@ def load_model(request: ModelRequest):
 
     if key not in models:
         if request.model_type == "faster_whisper":
-            model = WhisperModel(request.model_size, device=request.device, compute_type=request.compute_type)
+            model = WhisperModel(request.model_size, device=request.device, compute_type=request.compute_type, download_root=relative_dir)
         elif request.model_type == "whisperx":
             model = whisperx.load_model(request.model_size, request.device, compute_type=request.compute_type, download_root=relative_dir)
         else:
@@ -62,7 +64,8 @@ def load_model(request: ModelRequest):
     else:
         model = models[key]
 
-    return {"message": f"Model {request.model_name} of type {request.model_type} and size {request.model_size} loaded successfully."}
+    last_loaded_model_request = request
+    return {"message": f"Modelo {request.model_name} do tipo {request.model_type} e tamanho {request.model_size} carregado com sucesso."}
 @app.post("/upload-video/")
 async def upload_video(file: UploadFile = File(...)):
     file_location = f"uploads/{file.filename}"
@@ -105,29 +108,30 @@ def convert_video_to_wav(video_path, output_path=None):
 
 
 def transcribe_audio_with_stamps(audio_path):
-    model_request = ModelRequest(
-        model_name="whisperx_small",
-        model_type="whisperx",
-        model_size="small",
-        device="cpu",
-        compute_type="int8"
-    )
+    global last_loaded_model_request
 
-    load_model(model_request)  # Load the model using the updated function
+    if last_loaded_model_request is None:
+        raise ValueError("Modelo ainda não carregado.")
 
-    model_key = f"{model_request.model_type}_{model_request.model_name}_{model_request.model_size}_{model_request.device}_{model_request.compute_type}"
+    model_key = f"{last_loaded_model_request.model_type}_{last_loaded_model_request.model_name}_{last_loaded_model_request.model_size}_{last_loaded_model_request.device}_{last_loaded_model_request.compute_type}"
     model = models[model_key]
 
     audio = whisperx.load_audio(audio_path)
     result = model.transcribe(audio, batch_size=16)
 
-    if model_request.model_type == "whisperx":
-        model_a, metadata = whisperx.load_align_model(language_code=result["language"], device=model_request.device)
-        result = whisperx.align(result["segments"], model_a, metadata, audio, model_request.device, return_char_alignments=False)
+    if last_loaded_model_request.model_type == "whisperx":
+        model_a, metadata = whisperx.load_align_model(language_code=result["language"],
+                                                      device=last_loaded_model_request.device)
+        result = whisperx.align(result["segments"], model_a, metadata, audio, last_loaded_model_request.device,
+                                return_char_alignments=False)
 
-        diarize_model = whisperx.DiarizationPipeline(use_auth_token="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", device=model_request.device)
+        diarize_model = whisperx.DiarizationPipeline(use_auth_token="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",
+                                                     device=last_loaded_model_request.device)
         diarize_segments = diarize_model(audio, min_speakers=4)
         result = whisperx.assign_word_speakers(diarize_segments, result)
 
-    return result
+    if last_loaded_model_request.device == "cuda":
+        torch.cuda.empty_cache()
+        gc.collect()
 
+    return result
