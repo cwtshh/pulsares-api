@@ -8,9 +8,13 @@ import whisperx
 from pydantic import BaseModel
 from faster_whisper import WhisperModel
 import time
+import json
+import logging
+import shutil
 
 from sympy.strategies.core import switch
 from whisperx import align
+
 
 app = FastAPI()
 load_dotenv()
@@ -40,6 +44,46 @@ models = {}
 
 relative_dir = os.path.join(os.getcwd(), "models")  # Define a relative directory path
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+MODEL_KEYS_FILE = "model_keys.json"  # Arquivo para persistência das chaves
+
+# Função para salvar as chaves dos modelos em um arquivo JSON
+def save_model_keys():
+    with open(MODEL_KEYS_FILE, "w") as file:
+        json.dump(list(models.keys()), file)
+
+# Função para carregar as chaves dos modelos do arquivo JSON ao iniciar a API
+def load_model_keys():
+    global models
+    if os.path.exists(MODEL_KEYS_FILE):
+        with open(MODEL_KEYS_FILE, "r") as file:
+            model_keys = json.load(file)
+            for key in model_keys:
+                models[key] = None  # Inicializa os modelos com None ou outro valor apropriado
+
+load_model_keys()  # Carrega as chaves ao iniciar a API
+
+
+@app.get("/list-models/")
+def list_models():
+    model_keys=[nome for nome in os.listdir(relative_dir) if os.path.isdir(os.path.join(relative_dir, nome))]
+     # Retorna as chaves dos modelos carregados
+    return {"models": model_keys}
+
+
+
+# Endpoint para deletar um modelo específico
+@app.delete("/list-models/{model_key}")
+def delete_model(model_key: str):
+    if model_key in models:
+        model_dir = os.path.join(relative_dir, model_key) 
+        del models[model_key]
+        shutil.rmtree(model_dir)
+        return {"message": f"Model {model_key} deleted successfully."}
+    else:
+        raise HTTPException(status_code=404, detail="Model not found")
+
 @app.get('/')
 def test_route():
     return {'message': 'Hello World'}
@@ -49,21 +93,28 @@ def test_route():
 def load_model(request: ModelRequest):
     global models
     key = f"{request.model_type}_{request.model_name}_{request.model_size}_{request.device}_{request.compute_type}"
-    global model_request
-    model_request = ModelRequest(model_name=request.model_name, model_type=request.model_type, model_size=request.model_size, device=request.device, compute_type=request.compute_type)
+    model_dir = os.path.join(relative_dir, key)  # Define o caminho da subpasta
+
+    # Cria a pasta do modelo se ela ainda não existir
+    os.makedirs(relative_dir, exist_ok=True)
+    
     if key not in models:
+        # Carrega o modelo baseado no tipo
         if request.model_type == "faster_whisper":
-            model = WhisperModel(request.model_size, device=request.device, compute_type=request.compute_type)
+            model = WhisperModel(request.model_size, device=request.device, compute_type=request.compute_type, download_root=model_dir)
         elif request.model_type == "whisperx":
-            model = whisperx.load_model(request.model_size, request.device, compute_type=request.compute_type, download_root=relative_dir)
+            model = whisperx.load_model(request.model_size, request.device, compute_type=request.compute_type, download_root=model_dir)
         else:
             raise ValueError("Invalid model type. Choose either 'faster_whisper' or 'whisperx'.")
-
+       
         models[key] = model
+        save_model_keys()  # Salva as chaves após o carregamento de um novo modelo
     else:
         model = models[key]
+    
+    return {"message": f"Model {key} loaded successfully in {relative_dir}."}
 
-    return {"message": f"Model {request.model_name} of type {request.model_type} and size {request.model_size} loaded successfully."}
+
 @app.post("/upload-video/")
 async def upload_video(file: UploadFile = File(...)):
     file_location = f"uploads/{file.filename}"
