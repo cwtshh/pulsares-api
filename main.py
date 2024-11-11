@@ -74,9 +74,9 @@ def list_models():
 
 
 # Endpoint para deletar um modelo específico
-@app.delete("/list-models/{model_key}")
+@app.delete("/delete-models/{model_key}")
 def delete_model(model_key: str):
-    if model_key in models:
+    if model_key in models: 
         model_dir = os.path.join(relative_dir, model_key) 
         del models[model_key]
         shutil.rmtree(model_dir)
